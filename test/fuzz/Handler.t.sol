@@ -64,6 +64,7 @@ contract Handler is Test {
         address sender = userWithCollateralDeposited[addressSeed % userWithCollateralDeposited.length];
         ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
 
+        // Get the amount to of a collateral token a user deposited, they might deposit weth and not wbtc
         uint256 maxCollateral = dsce.getCollateralBalanceOfUser(sender, address(collateral));
         // if nothing deposited, nothing to do
         if (maxCollateral == 0) return;
@@ -84,9 +85,9 @@ contract Handler is Test {
             // compute minimum collateral (USD) required to keep health factor >= MIN_HEALTH_FACTOR
             // requiredCollateralUsd = (MIN_HEALTH_FACTOR * totalDscMinted * LIQUIDATION_PRECISION)
             //                       / (LIQUIDATION_THRESHOLD * PRECISION)
-            uint256 requiredCollateralUsd = (
-                dsce.getMinHealthFactor() * totalDscMinted * dsce.getLiquidationPrecision()
-            ) / (dsce.getLiquidationThreshold() * dsce.getPrecision());
+            uint256 requiredCollateralUsd = (dsce.getMinHealthFactor()
+                    * totalDscMinted
+                    * dsce.getLiquidationPrecision()) / (dsce.getLiquidationThreshold() * dsce.getPrecision());
 
             // if requiredCollateralUsd >= collateralValueInUsd => they can't redeem anything safely
             if (requiredCollateralUsd >= collateralValueInUsd) {
