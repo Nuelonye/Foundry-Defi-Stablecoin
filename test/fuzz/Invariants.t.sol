@@ -57,5 +57,6 @@ contract Invariant is StdInvariant, Test {
         console.log("Total DSC: ", dscTotalSuppy);
         console.log("Mint Calls", handler.timesMintIsCalled());
         console.log("Redeem Calls", handler.timesRedeemIsCalled());
+        console.log("DepositCollateralAndMintDsc Calls", handler.timesDepositCollateralAndMintDscIsCalled());
     }
 }

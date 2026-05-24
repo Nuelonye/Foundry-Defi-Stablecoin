@@ -22,6 +22,8 @@ contract Handler is Test {
 
     uint256 public timesMintIsCalled;
     uint256 public timesRedeemIsCalled;
+    uint256 public timesDepositCollateralAndMintDscIsCalled;
+
     address[] public userWithCollateralDeposited;
     MockV3Aggregator public ethUsdPriceFeed;
 
@@ -55,6 +57,65 @@ contract Handler is Test {
         }
         // This may double push addresses if an address is used to call the function more than once
         userWithCollateralDeposited.push(msg.sender);
+    }
+
+    // mint DSC <--
+    function mintDsc(uint256 amountToMint, uint256 addressSeed) public {
+        if (userWithCollateralDeposited.length == 0) {
+            return;
+        }
+
+        address sender = userWithCollateralDeposited[addressSeed % userWithCollateralDeposited.length];
+        (uint256 totalDscMint, uint256 totalCollateralValue) = dsce.getAccountInformation(sender);
+
+        // Makes sure they can only mint at maximum half of their entire collateral
+        // In other not to break health factor
+        int256 maxDscToMint = (int256(totalCollateralValue) / 2) - int256(totalDscMint); // uint don't recognize negative
+        if (maxDscToMint < 0) {
+            return;
+        }
+
+        amountToMint = bound(amountToMint, 0, uint256(maxDscToMint));
+        if (amountToMint == 0) {
+            return;
+        }
+
+        vm.startPrank(sender);
+        dsce.mintDsc(amountToMint);
+        vm.stopPrank();
+        timesMintIsCalled++;
+    }
+
+    function depositCollateralAndMintDsc(uint256 collateralSeed, uint256 amountCollateral, uint256 amountDscToMint)
+        public
+    {
+        ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
+
+        amountCollateral = bound(amountCollateral, 1, MAX_DEPOSIT_SIZE);
+
+        vm.startPrank(msg.sender);
+
+        collateral.mint(msg.sender, amountCollateral);
+
+        collateral.approve(address(dsce), amountCollateral);
+
+        uint256 collateralValueInUsd = dsce.getUsdValue(address(collateral), amountCollateral);
+
+        // assuming liquidation threshold is 50%
+        uint256 maxDscToMint = collateralValueInUsd / 2;
+
+        amountDscToMint = bound(amountDscToMint, 0, maxDscToMint);
+
+        if (amountDscToMint == 0) {
+            vm.stopPrank();
+            return;
+        }
+
+        dsce.depositCollateralAndMintDsc(address(collateral), amountCollateral, amountDscToMint);
+
+        vm.stopPrank();
+
+        timesDepositCollateralAndMintDscIsCalled++;
     }
 
     // redeem collateral <--
@@ -113,33 +174,6 @@ contract Handler is Test {
         dsce.redeemCollateral(address(collateral), amountCollateral);
         vm.stopPrank();
         timesRedeemIsCalled++;
-    }
-
-    // mint DSC <--
-    function mintDsc(uint256 amountToMint, uint256 addressSeed) public {
-        if (userWithCollateralDeposited.length == 0) {
-            return;
-        }
-
-        address sender = userWithCollateralDeposited[addressSeed % userWithCollateralDeposited.length];
-        (uint256 totalDscMint, uint256 totalCollateralValue) = dsce.getAccountInformation(sender);
-
-        // Makes sure they can only mint at maximum half of their entire collateral
-        // In other not to break health factor
-        int256 maxDscToMint = (int256(totalCollateralValue) / 2) - int256(totalDscMint); // uint don't recognize negative
-        if (maxDscToMint < 0) {
-            return;
-        }
-
-        amountToMint = bound(amountToMint, 0, uint256(maxDscToMint));
-        if (amountToMint == 0) {
-            return;
-        }
-
-        vm.startPrank(sender);
-        dsce.mintDsc(amountToMint);
-        vm.stopPrank();
-        timesMintIsCalled++;
     }
 
     // This breaks our invariant test suite
